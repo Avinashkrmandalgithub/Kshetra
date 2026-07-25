@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "FullName": "Sk Rijwan",
+    "AadhaarHash": "689257557011",
+    "PlotNumber": 101001,
+    "area": "1200 sqft",
+    "Location": "Kolkata, West Bengal",
+    "imgUrl": "https://example.com/land1.jpg"
+  },
+  {
+    "id": 2,
+    "FullName": "Avinash Kr Mandal",
+    "AadhaarHash": "997877513372",
+    "PlotNumber": 102002,
+    "area": "2 acres",
+    "Location": "Lucknow, Uttar Pradesh",
+    "imgUrl": "https://example.com/land2.jpg"
+  },
+  {
+    "id": 3,
+    "FullName": "Ankita Das",
+    "AadhaarHash": "467937055347",
+    "PlotNumber": 103003,
+    "area": "850 sqft",
+    "Location": "Bhubaneswar, Odisha"
+  },
+  {
+    "id": 4,
+    "FullName": "Tarapada Garai",
+    "AadhaarHash": "399194356894",
+    "PlotNumber": 104004,
+    "area": "1500 sqft",
+    "Location": "Delhi, India"
+  },
+  {
+    "id": 5,
+    "FullName": "Sneha Gupta",
+    "AadhaarHash": "0x4d8f559490c8b0a1c6f7e8d9a123456789abcdef0123456789abcdef04455667",
+    "PlotNumber": 105005,
+    "area": "3 acres",
+    "Location": "Jaipur, Rajasthan"
+  }
+]
