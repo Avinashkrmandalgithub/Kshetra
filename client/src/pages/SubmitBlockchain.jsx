@@ -76,6 +76,7 @@ export default function SubmitBlockchain() {
     aadhaarNo: verifyData?.aadhaar || "",
     plotNo: verifyData?.PlotNumber || "",
     area: verifyData?.area || "",
+    price: verifyData?.price || "",
     location: verifyData?.Location || "",
   });
 
@@ -219,6 +220,7 @@ export default function SubmitBlockchain() {
         hashedId,
         formData.plotNo,
         formData.area,
+        formData.price,
         formData.location,
         ipfsimge,
       );
@@ -240,6 +242,7 @@ export default function SubmitBlockchain() {
       aadhaarNo: "",
       plotNo: "",
       area: "",
+      price: "",
       location: "",
     });
     setPoints([]);
@@ -362,22 +365,64 @@ export default function SubmitBlockchain() {
                           : "bg-[#F0F0F0] text-gray-400 border-dashed"
                       }`}
                     >
-                      <span>
-                        P{idx + 1}:{" "}
-                        {pt
-                          ? `${pt[0].toFixed(4)}, ${pt[1].toFixed(4)}`
-                          : "---"}
-                      </span>
-                      {pt && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePoint(idx)}
-                          title="Remove Point"
-                          className="bg-[#121212] text-white font-bold px-1.5 py-0.5 hover:bg-red-600 transition-colors duration-150 ml-1"
-                        >
-                          ✕
-                        </button>
-                      )}
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="uppercase text-[10px] tracking-wider text-gray-700">
+                          Point {idx + 1} (P{idx + 1})
+                        </span>
+                        {pt && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePoint(idx)}
+                            title="Remove Point"
+                            className="bg-[#121212] text-white font-bold px-1.5 py-0.5 hover:bg-red-600 transition-colors duration-150 ml-1"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      {/* input */}
+                      <div>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="Latitude"
+                          value={pt ? pt[0] : ""}
+                          onChange={(e) => {
+                            const rawData = e.target.value;
+                            const val =
+                              rawData === "" ? 0 : parseFloat(rawData);
+                            const currentLng = pt ? pt[1] : 85.96;
+
+                            if (!isNaN(val)) {
+                              const updated = [...points];
+                              updated[idx] = [val, currentLng];
+                              setPoints(updated);
+                              updatePlotNoFromPoints(updated);
+                            }
+                          }}
+                          className="w-1/2 p-1 border-2 border-[#121212] bg-white text-[11px] font-bold focus:outline-none"
+                        />
+
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="Longitude"
+                          value={pt ? pt[1] : ""}
+                          onChange={(e) => {
+                            const rawData = e.target.value;
+                            const val =
+                              rawData === "" ? 0 : parseFloat(rawData);
+                            const currentLat = pt ? pt[0] : 22.273;
+                            if (!isNaN(val)) {
+                              const updated = [...points];
+                              updated[idx] = [currentLat, val];
+                              setPoints(updated);
+                              updatePlotNoFromPoints(updated);
+                            }
+                          }}
+                          className="w-1/2 p-1 border-2 border-[#121212] bg-white text-[11px] font-bold focus:outline-none"
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -464,13 +509,12 @@ export default function SubmitBlockchain() {
                 </label>
                 <div className="flex shadow-[3px_3px_0px_0px_#121212]">
                   <input
-                    type="text"
+                    type="number"
                     name="area"
                     placeholder="2400"
                     value={formData.area}
                     onChange={handleChange}
                     required
-                    readOnly
                     className="w-full p-4 border-4 border-r-0 border-[#121212] bg-[#F0F0F0] font-bold focus:outline-none focus:bg-white"
                   />
                   <div className="bg-[#121212] text-white flex items-center justify-center px-4 border-4 border-[#121212] font-black uppercase tracking-wider text-sm">
@@ -481,6 +525,26 @@ export default function SubmitBlockchain() {
 
               <div className="flex flex-col">
                 <label className="text-lg font-black uppercase tracking-tight mb-2">
+                  Total Price
+                </label>
+                <div className="flex shadow-[3px_3px_0px_0px_#121212]">
+                  <input
+                    type="number"
+                    name="price"
+                    placeholder="₹2400"
+                    value={formData.price}
+                    onChange={handleChange}
+                    required
+                    className="w-full p-4 border-4 border-r-0 border-[#121212] bg-[#F0F0F0] font-bold focus:outline-none focus:bg-white"
+                  />
+                  <div className="bg-[#121212] text-white flex items-center justify-center px-4 border-4 border-[#121212] font-black uppercase tracking-wider text-sm">
+                    Sq Ft
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col md:col-span-2">
+                <label className="text-lg font-black uppercase tracking-tight mb-2">
                   Physical Address / Location
                 </label>
                 <textarea
@@ -489,9 +553,8 @@ export default function SubmitBlockchain() {
                   value={formData.location}
                   onChange={handleChange}
                   required
-                  readOnly
                   rows="2"
-                  className="p-4 border-4 border-[#121212] bg-[#F0F0F0] font-bold focus:outline-none focus:bg-white shadow-[3px_3px_0px_0px_#121212] resize-none"
+                  className="w-full p-4 border-4 border-[#121212] bg-[#F0F0F0] font-bold focus:outline-none focus:bg-white shadow-[3px_3px_0px_0px_#121212] resize-none"
                 ></textarea>
               </div>
             </div>

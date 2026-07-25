@@ -143,9 +143,10 @@ const AadhaarValidation = () => {
                   <button
                     disabled={aadhaar.length !== 12 || isLoading}
                     className={`w-full py-5 border-4 border-black font-black uppercase tracking-[0.15em] flex items-center justify-center gap-4 transition-all text-lg
-                      ${aadhaar.length === 12
-                        ? "bg-[#F0C020] text-black shadow-[6px_6px_0px_0px_black] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_black] active:translate-y-1 active:shadow-none"
-                        : "bg-gray-200 text-gray-400 cursor-not-allowed opacity-60"
+                      ${
+                        aadhaar.length === 12
+                          ? "bg-[#F0C020] text-black shadow-[6px_6px_0px_0px_black] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_black] active:translate-y-1 active:shadow-none"
+                          : "bg-gray-200 text-gray-400 cursor-not-allowed opacity-60"
                       }`}
                   >
                     {isLoading ? "Verifying..." : "Initialize"}
@@ -192,9 +193,10 @@ const AadhaarValidation = () => {
                   <button
                     disabled={otp.length !== 6 || isLoading}
                     className={`w-full py-5 border-4 border-black font-black uppercase tracking-[0.15em] flex items-center justify-center gap-4 transition-all text-lg
-                      ${otp.length === 6
-                        ? "bg-[#D02020] text-white shadow-[6px_6px_0px_0px_black] hover:-translate-y-1 active:translate-y-1 active:shadow-none"
-                        : "bg-gray-200 cursor-not-allowed opacity-60 text-gray-400"
+                      ${
+                        otp.length === 6
+                          ? "bg-[#D02020] text-white shadow-[6px_6px_0px_0px_black] hover:-translate-y-1 active:translate-y-1 active:shadow-none"
+                          : "bg-gray-200 cursor-not-allowed opacity-60 text-gray-400"
                       }`}
                   >
                     {isLoading ? "Validating..." : "Confirm Access"}
@@ -225,9 +227,7 @@ const AadhaarValidation = () => {
                     UIDAI registry.
                   </p>
                   <Link to="/verify-land">
-                    <button
-                      className="w-full py-4 bg-black text-white border-4 border-black font-black uppercase tracking-[0.2em] shadow-[6px_6px_0px_0px_#1040C0] hover:-translate-y-1 active:translate-y-0 transition-all"
-                    >
+                    <button className="w-full py-4 bg-black text-white border-4 border-black font-black uppercase tracking-[0.2em] shadow-[6px_6px_0px_0px_#1040C0] hover:-translate-y-1 active:translate-y-0 transition-all">
                       Proceed
                     </button>
                   </Link>
