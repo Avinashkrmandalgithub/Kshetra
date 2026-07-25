@@ -1,10 +1,11 @@
-require("@nomicfoundation/hardhat-ethers");
-require("dotenv").config();
+import { defineConfig } from "hardhat/config";
+import hardhatEthers from "@nomicfoundation/hardhat-ethers";
+import "dotenv/config";
 
 const { INFURA_API_KEY, PRIVATE_KEY } = process.env;
 
-/** @type import('hardhat/config').HardhatUserConfig */
-module.exports = {
+export default defineConfig({
+  plugins: [hardhatEthers],
   solidity: "0.8.28",
   defaultNetwork: "sepolia",
   networks: {
@@ -17,4 +18,4 @@ module.exports = {
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
     },
   },
-};
+});
