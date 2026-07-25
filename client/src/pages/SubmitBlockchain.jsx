@@ -2,8 +2,7 @@ import React, { useState, useEffect } from "react";
 import Navbar from "../components/Navbar.jsx";
 import Footer from "../components/Footer.jsx";
 import Button from "../components/UI/Button.jsx";
-import { BrowserProvider, ethers } from "ethers";
-import { keccak256, toUtf8Bytes } from "ethers";
+import { BrowserProvider, ethers, keccak256, toUtf8Bytes } from "ethers";
 import contract from "../contracts/LandRegistry.sol/AllLandRegistry.json";
 import SuccessPage from "./SuccessPage.jsx";
 import { useVerifyData } from "../contaxts/verifyDataContext.jsx";
@@ -72,8 +71,8 @@ export default function SubmitBlockchain() {
   const [points, setPoints] = useState([]);
 
   const [formData, setFormData] = useState({
-    fullName: verifyData?.name || "",
-    aadhaarNo: verifyData?.aadhaar || "",
+    fullName: verifyData?.name || "Sk Rijwan",
+    aadhaarNo: verifyData?.aadhaar || "689257557011",
     plotNo: verifyData?.PlotNumber || "",
     area: verifyData?.area || "",
     price: verifyData?.price || "",
@@ -95,6 +94,16 @@ export default function SubmitBlockchain() {
   const [imagefile, setImagefile] = useState();
   const [loder, setLoder] = useState(false);
   const [ipfsStatus, setIpfsStatus] = useState("idle");
+
+  const encodeCoordinate = (point) => {
+    if (!point) return 0n;
+    const [lat, lng] = point;
+    const normalizedLat = Math.round((lat + 90) * 1_000_000);
+    const normalizedLng = Math.round((lng + 180) * 1_000_000);
+    return BigInt(normalizedLat) * 1_000_000_000n + BigInt(normalizedLng);
+  };
+
+  const toWeiPrice = (price) => ethers.parseEther(String(price || "0"));
 
   const updatePlotNoFromPoints = (pts) => {
     const pointsString = pts
@@ -193,8 +202,8 @@ export default function SubmitBlockchain() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (points.length === 0) {
-      alert("Please mark at least 1 coordinate point on the map!");
+    if (points.length !== 4) {
+      alert("Please mark exactly 4 coordinate points on the map!");
       return;
     }
 
@@ -206,6 +215,12 @@ export default function SubmitBlockchain() {
     }
 
     try {
+      if (!ethereum) {
+        alert("Please install or unlock MetaMask first!");
+        setLoder(false);
+        return;
+      }
+
       const hashedId = keccak256(toUtf8Bytes(formData.aadhaarNo));
       const WalletProvider = new BrowserProvider(ethereum);
       const singer = await WalletProvider.getSigner();
@@ -215,14 +230,26 @@ export default function SubmitBlockchain() {
         singer,
       );
 
+      const encodedPoints = [0, 1, 2, 3].map((index) => encodeCoordinate(points[index]));
+      const imageHash = ipfsimge.trim();
+
+      if (!imageHash) {
+        alert("Please upload the document to IPFS first!");
+        setLoder(false);
+        return;
+      }
+
       const Landdata = await submitLandDatatnx.AddNewLand(
-        formData.fullName,
+        formData.fullName.trim(),
         hashedId,
-        formData.plotNo,
-        formData.area,
-        formData.price,
-        formData.location,
-        ipfsimge,
+        encodedPoints[0],
+        encodedPoints[1],
+        encodedPoints[2],
+        encodedPoints[3],
+        toWeiPrice(formData.price),
+        String(formData.area).trim(),
+        formData.location.trim(),
+        imageHash,
       );
 
       await Landdata.wait();
@@ -688,3 +715,4 @@ export default function SubmitBlockchain() {
     </div>
   );
 }
+
