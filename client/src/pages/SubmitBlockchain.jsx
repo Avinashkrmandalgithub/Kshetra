@@ -1,51 +1,146 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Navbar from "../components/Navbar.jsx";
 import Footer from "../components/Footer.jsx";
 import Button from "../components/UI/Button.jsx";
-import { BrowserProvider, ethers } from 'ethers';
+import { BrowserProvider, ethers } from "ethers";
 import { keccak256, toUtf8Bytes } from "ethers";
-import contract from "../contracts/LandRegistry.sol/AllLandRegistry.json"
+import contract from "../contracts/LandRegistry.sol/AllLandRegistry.json";
 import SuccessPage from "./SuccessPage.jsx";
 import { useVerifyData } from "../contaxts/verifyDataContext.jsx";
+
+// Map Imports & CSS
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Polygon,
+  Popup,
+  useMapEvents,
+  useMap,
+} from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+// Fix Leaflet default marker icons issue in React
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+  iconUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+  shadowUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+});
+
+// Map Click & Cursor Handler Helper Component
+function MapClickHandler({ onMapClick, pointsCount }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (pointsCount < 4) {
+      map.getContainer().style.cursor = "crosshair";
+    } else {
+      map.getContainer().style.cursor = "grab";
+    }
+  }, [pointsCount, map]);
+
+  useMapEvents({
+    click(e) {
+      if (pointsCount < 4) {
+        onMapClick([e.latlng.lat, e.latlng.lng]);
+      }
+    },
+  });
+  return null;
+}
+
+// Auto Recenter / Fly to First Marker Component
+function MapFlyToLocation({ points }) {
+  const map = useMap();
+  useEffect(() => {
+    if (points.length === 1) {
+      map.flyTo(points[0], 17, { duration: 1.2, easeLinearity: 0.25 });
+    }
+  }, [points, map]);
+  return null;
+}
 
 export default function SubmitBlockchain() {
   const { verifyData } = useVerifyData();
   const { ethereum } = window;
+
+  const [points, setPoints] = useState([]);
+
   const [formData, setFormData] = useState({
-    fullName: verifyData.name || "",
-    aadhaarNo: verifyData.aadhaar || "",
-    plotNo: verifyData.PlotNumber || "",
-    area: verifyData.area || "",
-    location: verifyData.Location || "",
+    fullName: verifyData?.name || "",
+    aadhaarNo: verifyData?.aadhaar || "",
+    plotNo: verifyData?.PlotNumber || "",
+    area: verifyData?.area || "",
+    location: verifyData?.Location || "",
   });
-  const [blocksubmit,setBlocksubmit]=useState(false)
-  const [BlockData,setBlockData]=useState({})
-  // 2. Single Unified State for File/Image Data
+
+  const [blocksubmit, setBlocksubmit] = useState(false);
+  const [BlockData, setBlockData] = useState({});
+
   const [fileData, setFileData] = useState({
-    file: null, // Actual File object
-    previewUrl: null, // Blob URL for image preview
-    name: "", // File name
-    size: "", // File size in KB
-    type: "", // MIME type
+    file: null,
+    previewUrl: null,
+    name: "",
+    size: "",
+    type: "",
   });
-  const [ipfsimge, setipfsimg] = useState('')
-  const [imagefile, setImagefile] = useState()
-  const [loder, setLoder] = useState(false)
-  // 3. Track IPFS Step: "idle" | "pending" | "uploaded"
+
+  const [ipfsimge, setipfsimg] = useState("");
+  const [imagefile, setImagefile] = useState();
+  const [loder, setLoder] = useState(false);
   const [ipfsStatus, setIpfsStatus] = useState("idle");
 
-  // --- HANDLERS ---
+  const updatePlotNoFromPoints = (pts) => {
+    const pointsString = pts
+      .map(
+        (pt, idx) => `P${idx + 1}: (${pt[0].toFixed(5)}, ${pt[1].toFixed(5)})`,
+      )
+      .join(" | ");
 
-  // Handle Text Inputs
+    setFormData((prev) => ({ ...prev, plotNo: pointsString }));
+  };
+
+  // --- MAP HANDLERS ---
+  const handleAddPoint = (latlng) => {
+    if (points.length < 4) {
+      const newPoints = [...points, latlng];
+      setPoints(newPoints);
+      updatePlotNoFromPoints(newPoints);
+    }
+  };
+
+  const handleRemovePoint = (index) => {
+    const updatedPoints = points.filter((_, i) => i !== index);
+    setPoints(updatedPoints);
+    updatePlotNoFromPoints(updatedPoints);
+  };
+
+  const handleDragMarker = (index, event) => {
+    const { lat, lng } = event.target.getLatLng();
+    const updatedPoints = [...points];
+    updatedPoints[index] = [lat, lng];
+    setPoints(updatedPoints);
+    updatePlotNoFromPoints(updatedPoints);
+  };
+
+  const handleClearMap = () => {
+    setPoints([]);
+    setFormData((prev) => ({ ...prev, plotNo: "" }));
+  };
+
+  // --- FORM HANDLERS ---
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
   };
 
-  // Handle File Selection
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
-
     if (selectedFile) {
       const isImage = selectedFile.type.startsWith("image/");
       const preview = isImage ? URL.createObjectURL(selectedFile) : null;
@@ -60,74 +155,85 @@ export default function SubmitBlockchain() {
       };
 
       setFileData(newFileData);
-      setImagefile(selectedFile)
-      setIpfsStatus("pending"); // Ready to upload to IPFS
-
-      console.log("==== FILE SELECTED & STATE UPDATED ====");
-      console.log(newFileData);
+      setImagefile(selectedFile);
+      setIpfsStatus("pending");
     }
   };
 
-  // Action 1: Upload to IPFS (Instant State Change & Log)
   const handleIPFSUpload = async (e) => {
     e.preventDefault();
-    setIpfsStatus('pending');
-    setLoder(true)
+    setIpfsStatus("pending");
+    setLoder(true);
     if (!fileData.file) return;
-    const imgdata = new FormData();
-    imgdata.append("file", imagefile);
-    const requesturl = `https://api.pinata.cloud/pinning/pinFileToIPFS`
-    const uploadrequest = await fetch(requesturl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${import.meta.env.VITE_PINATA_JWT}`,
-      },
-      body: imgdata
-    })
 
-    const upload = await uploadrequest.json()
-    console.log(upload)
-    setipfsimg(upload.IpfsHash)
+    try {
+      const imgdata = new FormData();
+      imgdata.append("file", imagefile);
+      const requesturl = `https://api.pinata.cloud/pinning/pinFileToIPFS`;
 
-    console.log(imagefile);
-    setLoder(false)
-    // Instantly update status to allow minting
-    setIpfsStatus("uploaded");
+      const uploadrequest = await fetch(requesturl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${import.meta.env.VITE_PINATA_JWT}`,
+        },
+        body: imgdata,
+      });
+
+      const upload = await uploadrequest.json();
+      setipfsimg(upload.IpfsHash);
+      setLoder(false);
+      setIpfsStatus("uploaded");
+    } catch (err) {
+      console.error(err);
+      setLoder(false);
+      alert("IPFS Upload Failed!");
+    }
   };
 
-  // Action 2: Mint to Blockchain
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoder(true)
-    if (fileData.file && ipfsStatus !== "uploaded") {
-      alert("Please upload the document to IPFS first!");
+    if (points.length === 0) {
+      alert("Please mark at least 1 coordinate point on the map!");
       return;
     }
-    const hashedId = keccak256(toUtf8Bytes(formData.aadhaarNo));
-    const WalletProvider = new BrowserProvider(ethereum);
-    const singer = await WalletProvider.getSigner();
-    const submitLandDatatnx = new ethers.Contract(
-      import.meta.env.VITE_CONTRACT_DEPOLY_ADDRESS,
-      contract.abi,
-      singer
-    )
-    const Landdata = await submitLandDatatnx.AddNewLand(
-      formData.fullName,
-      hashedId,
-      formData.plotNo,
-      formData.area,
-      formData.location,
-      ipfsimge
-    )
-    await Landdata.wait();
-    setBlockData(Landdata)
-    console.log(Landdata);
-    setLoder(false)
-    setBlocksubmit(true)
-    // Guard: Ensure file is uploaded to IPFS if selected
+
+    setLoder(true);
+    if (fileData.file && ipfsStatus !== "uploaded") {
+      alert("Please upload the document to IPFS first!");
+      setLoder(false);
+      return;
+    }
+
+    try {
+      const hashedId = keccak256(toUtf8Bytes(formData.aadhaarNo));
+      const WalletProvider = new BrowserProvider(ethereum);
+      const singer = await WalletProvider.getSigner();
+      const submitLandDatatnx = new ethers.Contract(
+        import.meta.env.VITE_CONTRACT_DEPOLY_ADDRESS,
+        contract.abi,
+        singer,
+      );
+
+      const Landdata = await submitLandDatatnx.AddNewLand(
+        formData.fullName,
+        hashedId,
+        formData.plotNo,
+        formData.area,
+        formData.location,
+        ipfsimge,
+      );
+
+      await Landdata.wait();
+      setBlockData(Landdata);
+      setLoder(false);
+      setBlocksubmit(true);
+    } catch (err) {
+      console.error(err);
+      setLoder(false);
+      alert("Blockchain minting failed!");
+    }
   };
 
-  // Action: Clear Form
   const clearForm = () => {
     setFormData({
       fullName: "",
@@ -136,6 +242,7 @@ export default function SubmitBlockchain() {
       area: "",
       location: "",
     });
+    setPoints([]);
     setFileData({
       file: null,
       previewUrl: null,
@@ -144,26 +251,24 @@ export default function SubmitBlockchain() {
       type: "",
     });
     setIpfsStatus("idle");
-    console.log("==== FORM CLEARED ====");
   };
-if(blocksubmit){
-  return(
-    <>
-     <div className="min-h-screen bg-[#F0F0F0] text-[#121212] font-['Outfit'] flex flex-col">
 
-    <SuccessPage hash={BlockData.hash} aadher={formData.aadhaarNo} />
-    </div>
-    </>
-  )
-}
+  if (blocksubmit) {
+    return (
+      <div className="min-h-screen bg-[#F0F0F0] text-[#121212] font-['Outfit'] flex flex-col">
+        <SuccessPage hash={BlockData.hash} aadher={formData.aadhaarNo} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F0F0F0] text-[#121212] font-['Outfit'] flex flex-col">
       <Navbar />
 
-      <main className="grow flex items-center justify-center p-6 md:p-12">
-        <div className="w-full max-w-4xl bg-white border-4 border-[#121212] shadow-[12px_12px_0px_0px_#121212] relative">
+      <main className="grow flex items-center justify-center p-4 md:p-8">
+        <div className="w-full max-w-5xl bg-white border-4 border-[#121212] shadow-[8px_8px_0px_0px_#121212] relative transition-shadow duration-200">
           {/* Header Strip */}
-          <div className="bg-[#1040C0] p-6 border-b-4 border-[#121212] flex flex-col md:flex-row justify-between items-center text-white">
+          <div className="bg-[#1040C0] p-6 border-b-4 border-[#121212] flex flex-col md:flex-row justify-between items-center text-white gap-4">
             <div>
               <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tighter">
                 Mint Land NFT
@@ -172,23 +277,21 @@ if(blocksubmit){
                 Secure Registry Protocol
               </p>
             </div>
-            <div className="mt-4 md:mt-0 flex items-center gap-2 bg-[#121212] border-2 border-[#F0C020] px-4 py-2">
-              <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+            <div className="flex items-center gap-2 bg-[#121212] border-2 border-[#F0C020] px-4 py-2 shadow-[3px_3px_0px_0px_#F0C020]">
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500 opacity-90"></div>
               <span className="font-bold font-mono text-sm tracking-wider">
                 0x71C...9A23
               </span>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-8 md:p-12">
-            {/* 2-Column Grid for Inputs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          <form onSubmit={handleSubmit} className="p-6 md:p-10 space-y-8">
+            {/* User Info Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="flex flex-col">
-                <label className="text-xl font-black uppercase tracking-tight mb-2 flex justify-between">
+                <label className="text-lg font-black uppercase tracking-tight mb-2 flex justify-between">
                   <span>Legal Full Name</span>
-                  <span className="text-[#D02020] text-sm pt-1">
-                    Sandbox API Ready
-                  </span>
+                  <span className="text-[#D02020] text-xs pt-1">Verified</span>
                 </label>
                 <input
                   type="text"
@@ -198,16 +301,14 @@ if(blocksubmit){
                   onChange={handleChange}
                   readOnly
                   required
-                  className="p-4 border-4 border-[#121212] bg-[#F0F0F0] font-medium focus:outline-none focus:bg-white focus:shadow-[6px_6px_0px_0px_#D02020] transition-all"
+                  className="p-4 border-4 border-[#121212] bg-[#F0F0F0] font-bold focus:outline-none focus:bg-white transition-colors duration-150"
                 />
               </div>
 
               <div className="flex flex-col">
-                <label className="text-xl font-black uppercase tracking-tight mb-2 flex justify-between">
+                <label className="text-lg font-black uppercase tracking-tight mb-2 flex justify-between">
                   <span>Aadhaar Number</span>
-                  <span className="text-[#D02020] text-sm pt-1">
-                    Sandbox API Ready
-                  </span>
+                  <span className="text-[#D02020] text-xs pt-1">Encrypted</span>
                 </label>
                 <input
                   type="text"
@@ -218,31 +319,150 @@ if(blocksubmit){
                   readOnly
                   maxLength={12}
                   required
-                  className="p-4 border-4 border-[#121212] bg-[#F0F0F0] font-medium focus:outline-none focus:bg-white focus:shadow-[6px_6px_0px_0px_#D02020] transition-all tracking-widest"
+                  className="p-4 border-4 border-[#121212] bg-[#F0F0F0] font-bold focus:outline-none focus:bg-white transition-colors duration-150 tracking-widest"
                 />
               </div>
+            </div>
 
-              <div className="flex flex-col">
-                <label className="text-xl font-black uppercase tracking-tight mb-2">
-                  Plot / Survey No.
+            {/* --- MAP INTEGRATION AREA --- */}
+            <div className="flex flex-col space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="text-lg font-black uppercase tracking-tight flex items-center gap-2">
+                  <span>Plot Map Boundary Marker</span>
+                  <span className="text-xs font-medium normal-case bg-blue-50 text-blue-900 px-2 py-0.5 rounded border border-blue-300">
+                    Click map to add corner points
+                  </span>
                 </label>
-                <input
-                  type="text"
-                  name="plotNo"
-                  placeholder="e.g. S-124/B"
-                  value={formData.plotNo}
-                  onChange={handleChange}
-                  readOnly
-                  required
-                  className="p-4 border-4 border-[#121212] bg-[#F0F0F0] font-medium focus:outline-none focus:bg-white focus:shadow-[6px_6px_0px_0px_#1040C0] transition-all"
-                />
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-black bg-[#121212] text-white px-3 py-1 border-2 border-[#121212]">
+                    {points.length}/4 Points
+                  </span>
+                  {points.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearMap}
+                      className="text-xs font-bold text-red-600 hover:text-red-700 uppercase border-2 border-red-600 px-2 py-0.5 bg-red-50 hover:bg-red-100 transition-colors duration-150"
+                    >
+                      Clear Points
+                    </button>
+                  )}
+                </div>
               </div>
 
+              {/* Point Coordinates Badges */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                {[0, 1, 2, 3].map((idx) => {
+                  const pt = points[idx];
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex items-center justify-between p-2.5 border-3 border-[#121212] font-mono text-xs font-black transition-colors duration-150 ${
+                        pt
+                          ? "bg-[#F0C020] text-[#121212]"
+                          : "bg-[#F0F0F0] text-gray-400 border-dashed"
+                      }`}
+                    >
+                      <span>
+                        P{idx + 1}:{" "}
+                        {pt
+                          ? `${pt[0].toFixed(4)}, ${pt[1].toFixed(4)}`
+                          : "---"}
+                      </span>
+                      {pt && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePoint(idx)}
+                          title="Remove Point"
+                          className="bg-[#121212] text-white font-bold px-1.5 py-0.5 hover:bg-red-600 transition-colors duration-150 ml-1"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Interactive Leaflet Map */}
+              <div className="border-4 border-[#121212] shadow-[4px_4px_0px_0px_#121212] overflow-hidden relative">
+                <MapContainer
+                  center={[22.273, 85.96]}
+                  zoom={15}
+                  scrollWheelZoom={true}
+                  doubleClickZoom={true}
+                  style={{ height: "360px", width: "100%" }}
+                  className="z-0"
+                >
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  />
+
+                  <MapClickHandler
+                    onMapClick={handleAddPoint}
+                    pointsCount={points.length}
+                  />
+
+                  <MapFlyToLocation points={points} />
+
+                  {/* Selected Points Markers */}
+                  {points.map((pt, idx) => (
+                    <Marker
+                      key={idx}
+                      position={pt}
+                      draggable={true}
+                      eventHandlers={{
+                        dragend: (e) => handleDragMarker(idx, e),
+                      }}
+                    >
+                      <Popup>
+                        <div className="font-sans text-xs font-bold text-[#121212]">
+                          <strong>Point {idx + 1}</strong>
+                          <br />
+                          Drag marker to adjust position accurately.
+                          <br />
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePoint(idx)}
+                            className="mt-2 text-red-600 underline font-bold"
+                          >
+                            Remove this point
+                          </button>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
+
+                  {/* Polygon outline */}
+                  {points.length > 1 && (
+                    <Polygon
+                      positions={points}
+                      pathOptions={{
+                        color: "#1040C0",
+                        fillColor: "#F0C020",
+                        fillOpacity: 0.35,
+                        weight: 3,
+                        dashArray: points.length < 4 ? "5, 5" : undefined,
+                      }}
+                    />
+                  )}
+                </MapContainer>
+              </div>
+
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 flex items-center gap-1 mt-1">
+                💡 <span className="text-[#1040C0] font-bold">Tip:</span> Click
+                up to 4 corner locations to draw property boundaries. Markers
+                can be dragged to fine-tune placement.
+              </p>
+            </div>
+
+            {/* Total Area & Physical Location */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="flex flex-col">
-                <label className="text-xl font-black uppercase tracking-tight mb-2">
-                  Total Area (Sq. Ft.)
+                <label className="text-lg font-black uppercase tracking-tight mb-2">
+                  Total Area
                 </label>
-                <div className="flex">
+                <div className="flex shadow-[3px_3px_0px_0px_#121212]">
                   <input
                     type="text"
                     name="area"
@@ -251,44 +471,48 @@ if(blocksubmit){
                     onChange={handleChange}
                     required
                     readOnly
-                    className="w-full p-4 border-4 border-r-0 border-[#121212] bg-[#F0F0F0] font-medium focus:outline-none focus:bg-white focus:shadow-[6px_6px_0px_0px_#1040C0] transition-all"
+                    className="w-full p-4 border-4 border-r-0 border-[#121212] bg-[#F0F0F0] font-bold focus:outline-none focus:bg-white"
                   />
-                  <div className="bg-[#121212] text-white flex items-center justify-center px-4 border-4 border-[#121212] font-bold uppercase">
+                  <div className="bg-[#121212] text-white flex items-center justify-center px-4 border-4 border-[#121212] font-black uppercase tracking-wider text-sm">
                     Sq Ft
                   </div>
                 </div>
               </div>
+
+              <div className="flex flex-col">
+                <label className="text-lg font-black uppercase tracking-tight mb-2">
+                  Physical Address / Location
+                </label>
+                <textarea
+                  name="location"
+                  placeholder="Complete property address with pincode..."
+                  value={formData.location}
+                  onChange={handleChange}
+                  required
+                  readOnly
+                  rows="2"
+                  className="p-4 border-4 border-[#121212] bg-[#F0F0F0] font-bold focus:outline-none focus:bg-white shadow-[3px_3px_0px_0px_#121212] resize-none"
+                ></textarea>
+              </div>
             </div>
 
-            <div className="flex flex-col mb-8">
-              <label className="text-xl font-black uppercase tracking-tight mb-2">
-                Physical Location / Address
-              </label>
-              <textarea
-                name="location"
-                placeholder="Complete property address with pincode..."
-                value={formData.location}
-                onChange={handleChange}
-                required
-                readOnly
-                rows="3"
-                className="p-4 border-4 border-[#121212] bg-[#F0F0F0] font-medium focus:outline-none focus:bg-white focus:shadow-[6px_6px_0px_0px_#F0C020] transition-all resize-none"
-              ></textarea>
-            </div>
-
-            {/* Image / Document Upload */}
-            <div className="flex flex-col mb-10">
-              <label className="text-xl font-black uppercase tracking-tight mb-2 flex justify-between">
-                <span>Property Image / Deed Document</span>
+            {/* Document Upload Section */}
+            <div className="flex flex-col">
+              <label className="text-lg font-black uppercase tracking-tight mb-2 flex justify-between">
+                <span>Property Image / Registry Document</span>
                 {ipfsStatus === "uploaded" && (
-                  <span className="text-[#1040C0] text-sm pt-1">
-                    IPFS Verified
+                  <span className="text-[#1040C0] font-extrabold text-sm pt-1">
+                    ✓ IPFS Uploaded
                   </span>
                 )}
               </label>
 
               <div
-                className={`relative border-4 border-dashed border-[#121212] p-8 text-center transition-colors group cursor-pointer ${ipfsStatus === "uploaded" ? "bg-[#1040C0]/10 border-solid border-[#1040C0]" : "bg-[#F0C020]/10 hover:bg-[#F0C020]/20"}`}
+                className={`relative border-4 border-dashed border-[#121212] p-6 text-center transition-colors duration-200 cursor-pointer shadow-[4px_4px_0px_0px_#121212] ${
+                  ipfsStatus === "uploaded"
+                    ? "bg-[#1040C0]/5 border-solid border-[#1040C0]"
+                    : "bg-[#F0C020]/10 hover:bg-[#F0C020]/15"
+                }`}
               >
                 <input
                   type="file"
@@ -298,41 +522,49 @@ if(blocksubmit){
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 />
 
-                <div className="flex flex-col items-center justify-center space-y-4">
+                <div className="flex flex-col items-center justify-center space-y-3">
                   {fileData.previewUrl ? (
                     <div className="z-20 flex flex-col items-center">
                       <img
                         src={fileData.previewUrl}
                         alt="Preview"
-                        className="h-40 w-auto object-cover border-4 border-[#121212] mb-4 shadow-[4px_4px_0px_0px_#121212]"
+                        className="h-32 w-auto object-cover border-3 border-[#121212] mb-3 shadow-[3px_3px_0px_0px_#121212]"
                       />
                       <p
-                        className={`font-bold text-xl bg-white border-2 border-[#121212] px-4 py-1 mb-2 ${ipfsStatus === "uploaded" ? "text-[#1040C0]" : "text-[#121212]"}`}
+                        className={`font-black text-sm bg-white border-2 border-[#121212] px-3 py-1 shadow-[2px_2px_0px_0px_#121212] ${
+                          ipfsStatus === "uploaded"
+                            ? "text-[#1040C0]"
+                            : "text-[#121212]"
+                        }`}
                       >
                         {fileData.name} ({fileData.size} KB)
                       </p>
                     </div>
                   ) : fileData.file ? (
                     <div className="z-20 flex flex-col items-center">
-                      <div className="w-16 h-16 mb-4 bg-[#121212] flex justify-center items-center">
-                        <div className="text-white font-bold text-xl">PDF</div>
+                      <div className="w-12 h-12 mb-2 bg-[#121212] flex justify-center items-center text-white font-black text-base border-2 border-[#121212]">
+                        PDF
                       </div>
                       <p
-                        className={`font-bold text-xl bg-white border-2 border-[#121212] px-4 py-1 mb-2 ${ipfsStatus === "uploaded" ? "text-[#1040C0]" : "text-[#121212]"}`}
+                        className={`font-black text-sm bg-white border-2 border-[#121212] px-3 py-1 shadow-[2px_2px_0px_0px_#121212] ${
+                          ipfsStatus === "uploaded"
+                            ? "text-[#1040C0]"
+                            : "text-[#121212]"
+                        }`}
                       >
                         {fileData.name} ({fileData.size} KB)
                       </p>
                     </div>
                   ) : (
                     <div>
-                      <div className="w-16 h-16 mx-auto mb-4 flex justify-center items-center transition-transform duration-300 bg-[#121212] group-hover:-translate-y-2">
-                        <div className="w-0 h-0 border-l-12 border-r-12 border-b-20 border-l-transparent border-r-transparent border-b-[#F0F0F0]"></div>
+                      <div className="w-10 h-10 mx-auto mb-2 flex justify-center items-center bg-[#121212]">
+                        <div className="w-0 h-0 border-l-6 border-r-6 border-b-10 border-l-transparent border-r-transparent border-b-[#F0F0F0]"></div>
                       </div>
-                      <p className="font-black uppercase text-xl text-[#121212]">
-                        Click or Drag to Upload
+                      <p className="font-black uppercase text-base text-[#121212]">
+                        Click or Drag File to Upload
                       </p>
-                      <p className="font-medium text-[#121212]/70 mt-1">
-                        JPG, PNG or PDF (Max 5MB)
+                      <p className="font-medium text-xs text-gray-600 mt-1">
+                        Supports JPG, PNG or PDF formats (Max 5MB)
                       </p>
                     </div>
                   )}
@@ -340,35 +572,46 @@ if(blocksubmit){
               </div>
             </div>
 
-            {/* Dynamic Action Buttons */}
+            {/* Action Buttons */}
             <div className="flex flex-col md:flex-row gap-4 border-t-4 border-[#121212] pt-8">
-              {/* Single Button that changes type and onClick based on state */}
               <Button
                 variant="primary"
-                className="w-full md:w-2/3 text-xl py-4 flex justify-center items-center gap-3 transition-all"
+                className="w-full md:w-2/3 text-lg py-4 flex justify-center items-center gap-3 font-black shadow-[4px_4px_0px_0px_#121212] active:scale-[0.99] transition-transform duration-100"
                 type={ipfsStatus === "pending" ? "button" : "submit"}
                 onClick={
                   ipfsStatus === "pending" ? handleIPFSUpload : undefined
                 }
               >
-                {ipfsStatus === "pending"
-                  ? loder ? <> <div
-                    className="w-6 h-6 mr-3 border-4 rounded-full border-white border-t-black border-r-black animate-spin"
-                    role="status"
-                    aria-label="loading"
-                  ></div>
-                    UPLOADING...</> : "Upload to IPFS"
-                  :loder ? <> <div
-                    className="w-6 h-6 mr-3 border-4 rounded-full border-white border-t-black border-r-black animate-spin"
-                    role="status"
-                    aria-label="loading"
-                  ></div>
-                    SUBMITTING...</> :  "Mint to Blockchain"}
+                {ipfsStatus === "pending" ? (
+                  loder ? (
+                    <>
+                      <div
+                        className="w-5 h-5 border-3 rounded-full border-white border-t-transparent animate-spin"
+                        role="status"
+                        aria-label="loading"
+                      ></div>
+                      UPLOADING TO IPFS...
+                    </>
+                  ) : (
+                    "Upload Document to IPFS"
+                  )
+                ) : loder ? (
+                  <>
+                    <div
+                      className="w-5 h-5 border-3 rounded-full border-white border-t-transparent animate-spin"
+                      role="status"
+                      aria-label="loading"
+                    ></div>
+                    MINTING BLOCKCHAIN TRANSACTION...
+                  </>
+                ) : (
+                  "Mint Land NFT to Blockchain"
+                )}
               </Button>
 
               <button
                 type="button"
-                className="w-full md:w-1/3 bg-white text-[#121212] border-4 border-[#121212] font-black uppercase tracking-widest hover:bg-gray-100 transition-colors py-4 active:translate-y-1"
+                className="w-full md:w-1/3 bg-white text-[#121212] border-4 border-[#121212] font-black uppercase tracking-wider hover:bg-red-50 hover:text-red-600 transition-colors duration-150 py-4 shadow-[4px_4px_0px_0px_#121212] active:scale-[0.99]"
                 onClick={clearForm}
               >
                 Clear Form
