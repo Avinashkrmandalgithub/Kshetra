@@ -12,28 +12,21 @@ const sendOTPByAadhar = asyncHandler(async (req, res) => {
         throw new ApiError(400, "aadhar number is required")
     }
 
-    const authorization = tmpData.get('access_token');
-    console.log({ authorization })
-
     const options = {
         method: 'POST',
         headers: {
-            'x-api-key': xApiKey,
-            Authorization: authorization,
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            '@entity': 'in.co.sandbox.kyc.aadhaar.okyc.otp.request',
             aadhaar_number: aadharNumber,
-            consent: 'y',
-            reason: 'For KYC'
+            authkey : xApiKey
         })
     };
 
-    const response = await fetch('https://api.sandbox.co.in/kyc/aadhaar/okyc/otp', options);
+    const response = await fetch('https://apitxt.com/api/aadhaarSendOTP', options);
     const data = await response.json();
     console.log({data})
-    if (response.status !== 200) {
+    if (data.status > 200) {
         throw new ApiError(response.status, data.message || "Failed to send OTP")
     }
 
@@ -46,47 +39,41 @@ const verifyAadharOTP = asyncHandler(async (req, res) => {
         throw new ApiError(400, "reference_id and otp are required")
     }
 
-    const authorization = tmpData.get('access_token');
-
     const options = {
         method: 'POST',
         headers: {
-            'x-api-key': xApiKey,
-            Authorization: authorization,
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            '@entity': 'in.co.sandbox.kyc.aadhaar.okyc.request',
-            reference_id: String(reference_id),
+            authkey : xApiKey,
+            reference_id: reference_id,
             otp: otp
         })
     };
 
-    const response = await fetch('https://api.sandbox.co.in/kyc/aadhaar/okyc/otp/verify', options);
+    const response = await fetch('https://apitxt.com/api/aadhaarVerifyOTP', options);
     const data = await response.json();
     console.log({data})
 
-    if (response.status !== 200) {
-        throw new ApiError(response.status, data.message || "Failed to verify OTP")
+    if (data.status > 200) {
+        throw new ApiError(data.status, data.message || "Failed to verify OTP")
     }
 
     const aadharInfo = data.data;
 
     const aadharRecord = await Aadhar.create({
+        verified : aadharInfo.verified,
         name: aadharInfo.name,
         full_address: aadharInfo.full_address,
         date_of_birth: aadharInfo.date_of_birth,
-        email_hash: aadharInfo.email_hash,
         gender: aadharInfo.gender,
         address: aadharInfo.address,
-        year_of_birth: aadharInfo.year_of_birth,
-        mobile_hash: aadharInfo.mobile_hash,
-        photo: aadharInfo.photo
+        photo: aadharInfo.photo,
+        has_photo : aadharInfo.has_photo,
+        care_of : aadharInfo.care_of,
     });
 
-    tmpData.delete('access_token');
-
-    return res.status(200).json(new ApiResponse(200, data, "OTP verified successfully"))
+    return res.status(200).json(new ApiResponse(200, aadharRecord, "OTP verified successfully"))
 })
 
 export {
