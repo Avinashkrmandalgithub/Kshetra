@@ -7,7 +7,7 @@ import verifyAadhar from "../middlewares/authorization.middleware.js";
 
 const router = Router();
 
-router.route("/send-otp").post(verifyAadhar, sendOTPByAadhar)
-router.route("/verify-otp").post(verifyAadhar, verifyAadharOTP)
+router.route("/send-otp").post(sendOTPByAadhar)
+router.route("/verify-otp").post(verifyAadharOTP)
 
 export default router;

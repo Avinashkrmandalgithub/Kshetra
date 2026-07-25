@@ -57,12 +57,12 @@ const AadhaarValidation = () => {
           otp: otp,
         },
       );
-      const varified = res.data?.data?.data?.status;
-      if (varified) {
+      const verified = res.data?.data?.verified;
+      if (verified) {
         setVerifyData({
           aadhaar: aadhaar,
-          name: res.data?.data?.data?.name,
-          address: res.data?.data?.data?.full_address,
+          name: res.data?.data?.name,
+          address: res.data?.data?.full_address,
         });
         setStep("success");
       } else {

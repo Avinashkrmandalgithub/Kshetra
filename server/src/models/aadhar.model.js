@@ -1,39 +1,43 @@
 import { Schema, model } from "mongoose";
 
 const addressSchema = new Schema({
-    country: {
-        type: String,
+    house : {
+        type : String,
     },
-    district: {
-        type: String,
+    street : {
+        type : String,
     },
-    house: {
-        type: String,
+    landmark : {
+        type : String,
     },
-    landmark: {
-        type: String,
+    vtc : {
+        type : String,
     },
-    pincode: {
-        type: String,
+    subdistrict : {
+        type : String,
     },
-    post_office: {
-        type: String,
+    district : {
+        type : String,
     },
-    state: {
-        type: String,
+    post_office : {
+        type : String,
     },
-    street: {
-        type: String,
+    state : {
+        type : String,
     },
-    subdistrict: {
-        type: String,
+    country : {
+        type : String,
     },
-    vtc: {
-        type: String,
+    pincode : {
+        type : Number,
     }
 }, { _id: false })
 
 const aadharSchema = new Schema({
+    verified : {
+        type : Boolean,
+        default : false
+    },
     name: {
         type: String,
     },
@@ -43,21 +47,19 @@ const aadharSchema = new Schema({
     date_of_birth: {
         type: String,
     },
-    email_hash: {
-        type: String,
-    },
     gender: {
         type: String,
     },
+    care_of : {
+        type: String,
+    },
     address: addressSchema,
-    year_of_birth: {
-        type: String,
-    },
-    mobile_hash: {
-        type: String,
-    },
     photo: {
         type: String,
+    },
+    has_photo: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true })
 
