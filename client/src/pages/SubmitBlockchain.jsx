@@ -102,7 +102,6 @@ export default function SubmitBlockchain() {
     const normalizedLng = Math.round((lng + 180) * 1_000_000);
     return BigInt(normalizedLat) * 1_000_000_000n + BigInt(normalizedLng);
   };
-
   const toWeiPrice = (price) => ethers.parseEther(String(price || "0"));
 
   const updatePlotNoFromPoints = (pts) => {
@@ -238,6 +237,7 @@ export default function SubmitBlockchain() {
         setLoder(false);
         return;
       }
+
 
       const Landdata = await submitLandDatatnx.AddNewLand(
         formData.fullName.trim(),
@@ -386,11 +386,10 @@ export default function SubmitBlockchain() {
                   return (
                     <div
                       key={idx}
-                      className={`flex items-center justify-between p-2.5 border-3 border-[#121212] font-mono text-xs font-black transition-colors duration-150 ${
-                        pt
+                      className={`flex items-center justify-between p-2.5 border-3 border-[#121212] font-mono text-xs font-black transition-colors duration-150 ${pt
                           ? "bg-[#F0C020] text-[#121212]"
                           : "bg-[#F0F0F0] text-gray-400 border-dashed"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="uppercase text-[10px] tracking-wider text-gray-700">
@@ -552,13 +551,13 @@ export default function SubmitBlockchain() {
 
               <div className="flex flex-col">
                 <label className="text-lg font-black uppercase tracking-tight mb-2">
-                  Total Price
+                  Total Price (ETH)
                 </label>
                 <div className="flex shadow-[3px_3px_0px_0px_#121212]">
                   <input
                     type="number"
                     name="price"
-                    placeholder="₹2400"
+                    placeholder="ET 0.1"
                     value={formData.price}
                     onChange={handleChange}
                     required
@@ -598,11 +597,10 @@ export default function SubmitBlockchain() {
               </label>
 
               <div
-                className={`relative border-4 border-dashed border-[#121212] p-6 text-center transition-colors duration-200 cursor-pointer shadow-[4px_4px_0px_0px_#121212] ${
-                  ipfsStatus === "uploaded"
+                className={`relative border-4 border-dashed border-[#121212] p-6 text-center transition-colors duration-200 cursor-pointer shadow-[4px_4px_0px_0px_#121212] ${ipfsStatus === "uploaded"
                     ? "bg-[#1040C0]/5 border-solid border-[#1040C0]"
                     : "bg-[#F0C020]/10 hover:bg-[#F0C020]/15"
-                }`}
+                  }`}
               >
                 <input
                   type="file"
@@ -621,11 +619,10 @@ export default function SubmitBlockchain() {
                         className="h-32 w-auto object-cover border-3 border-[#121212] mb-3 shadow-[3px_3px_0px_0px_#121212]"
                       />
                       <p
-                        className={`font-black text-sm bg-white border-2 border-[#121212] px-3 py-1 shadow-[2px_2px_0px_0px_#121212] ${
-                          ipfsStatus === "uploaded"
+                        className={`font-black text-sm bg-white border-2 border-[#121212] px-3 py-1 shadow-[2px_2px_0px_0px_#121212] ${ipfsStatus === "uploaded"
                             ? "text-[#1040C0]"
                             : "text-[#121212]"
-                        }`}
+                          }`}
                       >
                         {fileData.name} ({fileData.size} KB)
                       </p>
@@ -636,11 +633,10 @@ export default function SubmitBlockchain() {
                         PDF
                       </div>
                       <p
-                        className={`font-black text-sm bg-white border-2 border-[#121212] px-3 py-1 shadow-[2px_2px_0px_0px_#121212] ${
-                          ipfsStatus === "uploaded"
+                        className={`font-black text-sm bg-white border-2 border-[#121212] px-3 py-1 shadow-[2px_2px_0px_0px_#121212] ${ipfsStatus === "uploaded"
                             ? "text-[#1040C0]"
                             : "text-[#121212]"
-                        }`}
+                          }`}
                       >
                         {fileData.name} ({fileData.size} KB)
                       </p>

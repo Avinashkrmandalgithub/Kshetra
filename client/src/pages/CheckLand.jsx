@@ -339,10 +339,10 @@ const CheckLand = () => {
                     <div className="p-6 flex flex-col gap-6 grow">
                       <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0px_0px_black]">
                         <p className="text-xs font-black uppercase tracking-widest text-[#D02020] mb-1">
-                          Registered Owner
+                         {item.ownerName?"Registered Owner":"Current Owner"}
                         </p>
                         <p className="text-4xl font-black uppercase truncate">
-                          {item.ownerName}
+                          {item.ownerName?item.ownerName:item.currentOwnerName }
                         </p>
                       </div>
 
@@ -368,7 +368,7 @@ const CheckLand = () => {
                         <div>
                           <p className="text-[10px] font-black uppercase text-gray-500 mb-1">Owner Wallet Address</p>
                           <p className="text-xs font-mono bg-white border-2 border-black p-2 truncate">
-                            {item.ownerWallet}
+                            {item.ownerWallet?item.ownerWallet:item.currentOwnerWallet}
                           </p>
                         </div>
                         <div>
