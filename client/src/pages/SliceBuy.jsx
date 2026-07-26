@@ -1,94 +1,190 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import Button from "../components/UI/Button";
-import { ShoppingCart, User, MapPin, Tag, IndianRupee } from "lucide-react";
+import { ShoppingCart, User, MapPin, X, CheckCircle2 } from "lucide-react";
 import contract from "../contracts/LandRegistry.sol/AllLandRegistry.json";
-import { ethers } from "ethers";
+// Import the ABI specifically for the individual LandRegistry contract
+import childContract from "../contracts/LandRegistry.sol/LandRegistry.json";
+import { ethers, keccak256, toUtf8Bytes } from "ethers";
+
+// Leaflet Imports
+import { MapContainer, TileLayer, Polygon, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+// 💡 HELPER: Extract raw coordinates for Leaflet map mapping
+const getRawCoordinate = (encodedPoint) => {
+  const encoded = BigInt(encodedPoint.toString());
+  const lat = Number(encoded / 1_000_000_000n) / 1_000_000 - 90;
+  const lng = Number(encoded % 1_000_000_000n) / 1_000_000 - 180;
+  return [lat, lng];
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getLogsInChunks = async (contractInstance, filter, startBlock, endBlock) => {
+  const CHUNK_SIZE = 9900;
+  let allEvents = [];
+
+  for (let currentFrom = startBlock; currentFrom <= endBlock; currentFrom += CHUNK_SIZE) {
+    const currentTo = Math.min(currentFrom + CHUNK_SIZE - 1, endBlock);
+    const chunkEvents = await contractInstance.queryFilter(filter, currentFrom, currentTo);
+    allEvents = allEvents.concat(chunkEvents);
+    await sleep(300);
+  }
+  return allEvents;
+};
+
+const ModalMapBounds = ({ coordinates }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (coordinates && coordinates.length > 0) {
+      const bounds = L.latLngBounds(coordinates);
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }
+  }, [coordinates, map]);
+  return null;
+};
+
 const SliceBuy = () => {
-  // 1. Mock Data (Context/API se replace hoga)
-  const [marketplaceAssets, setmarketplaceAssets] = useState([
-    {
-      id: 1,
-      owner: "Avinash Kr Mandal",
-      plotNo: "B-204/L",
-      area: "200 Sq Ft (Slice)",
-      location: "Sector 12, Pune",
-      price: "12,50,000", // ₹ 12.5 Lakhs
-      image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&q=80&w=200",
-    },
-    {
-      id: 2,
-      owner: "Rajesh Kumar",
-      plotNo: "H-45",
-      area: "0.1 Acres",
-      location: "New Town, WB",
-      price: "45,00,000", // ₹ 45 Lakhs
-      image: "https://images.unsplash.com/photo-1500076656116-558758c991c1?auto=format&fit=crop&q=80&w=200",
-    },
-    {
-      id: 3,
-      owner: "Priya Singh",
-      plotNo: "Z-99",
-      area: "500 Sq Ft",
-      location: "Banjara Hills, HYD",
-      price: "85,75,000", // ₹ 85.75 Lakhs
-      image: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=200",
-    }
-  ]);
-  useState(() => {
-    const fecthalldata = async () => {
-      const infuraProvider = new ethers.JsonRpcProvider(
-        import.meta.env.VITE_INFURA_URL
-      );
-      const Landcontratcget = new ethers.Contract(
-        import.meta.env.VITE_CONTRACT_DEPOLY_ADDRESS,
-        contract.abi,
-        infuraProvider
-      );
+  const [marketplaceAssets, setmarketplaceAssets] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // 💡 Modal Flow States
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [purchaseStep, setPurchaseStep] = useState("review"); // 'review' | 'aadhaar' | 'processing' | 'success'
+  const [buyerAadhaar, setBuyerAadhaar] = useState("");
 
-      const depocontract = await Landcontratcget.filters.SaveLandRegistry();
-      const event = await Landcontratcget.queryFilter(depocontract);
-      if (event.length > 0) {
-        const parsedAssets = event.map((e) => {
-          const raw = e.args;
-          return {
-            ownerName: raw[0],
-            hashedId: raw[1],
-            plotNo: Number(raw[2]).toString(),
-            area: raw[3],
-            location: raw[4],
-            image: `https://amber-wonderful-kite-814.mypinata.cloud/ipfs/${raw[5]}`,
-            ownerWallet: raw[6],
-            registryWallet: raw[7],
-          };
-        });
-        setmarketplaceAssets(parsedAssets)
+  useEffect(() => {
+    const fetchAllData = async () => {
+      try {
+        const infuraProvider = new ethers.JsonRpcProvider(
+          import.meta.env.VITE_INFURA_URL
+        );
+        const Landcontratcget = new ethers.Contract(
+          import.meta.env.VITE_CONTRACT_DEPOLY_ADDRESS,
+          contract.abi,
+          infuraProvider
+        );
 
+        const depocontract = await Landcontratcget.filters.SaveLandRegistry();
+        const latestBlock = await infuraProvider.getBlockNumber();
+        const deployBlock = Number(import.meta.env.VITE_CONTRACT_DEPLOY_BLOCK || 11348788);
+
+        const event = await getLogsInChunks(Landcontratcget, depocontract, deployBlock, latestBlock);
+        let currentUserWallet = "";
+        if (window.ethereum) {
+          const accounts = await window.ethereum.request({ method: "eth_accounts" });
+          if (accounts.length > 0) currentUserWallet = accounts[0].toLowerCase();
+        }
+        if (event.length > 0) {
+          // Use Promise.all because we are making async contract calls inside the map
+          const parsedAssets = await Promise.all(event.map(async (e, index) => {
+            const raw = e.args;
+            const rawCoords = [raw[2], raw[3], raw[4], raw[5]].map(getRawCoordinate);
+            const registryWallet = raw[11];
+
+            const childContractInstance = new ethers.Contract(
+              registryWallet,
+              childContract.abi,
+              infuraProvider
+            );
+
+            // 💡 NEW: Fetch the CURRENT state variables from the contract
+            const liveOwner = await childContractInstance.Owner();
+            const liveAadhaarHash = await childContractInstance.AadhaarHash();
+            const liveFullName = await childContractInstance.FullName();
+
+            return {
+              id: e.transactionHash + "-" + index,
+              rawCoordinates: rawCoords,
+              plotNoString: rawCoords.map((c, idx) => `P${idx + 1}: (${c[0].toFixed(5)}, ${c[1].toFixed(5)})`).join(" | "),
+              price: ethers.formatEther(raw[6]),
+              area: raw[7],
+              location: raw[8],
+              image: `https://amber-wonderful-kite-814.mypinata.cloud/ipfs/${raw[9]}`,
+              registryWallet: registryWallet,
+
+              // 💡 Override the historical event data with the LIVE data
+              ownerName: liveFullName,
+              currentAadhaarHash: liveAadhaarHash,
+              currentOwnerWallet: liveOwner,
+              isOwnedByMe: liveOwner.toLowerCase() === currentUserWallet
+            };
+          }));
+
+          setmarketplaceAssets(parsedAssets);
+        }
+      } catch (error) {
+        console.error("Error fetching marketplace data:", error);
+      } finally {
+        setIsLoading(false);
       }
+    };
+
+    fetchAllData();
+  }, []);
+
+  // Open Modal & Reset Flow
+  const handleBuyClick = (asset) => {
+    setSelectedAsset(asset);
+    setPurchaseStep("review");
+    setBuyerAadhaar("");
+    setIsModalOpen(true);
+  };
+
+  // 💡 EXECUTE REAL SMART CONTRACT TRANSACTION
+  // 💡 EXECUTE REAL SMART CONTRACT TRANSACTION
+  const executePurchase = async () => {
+    if (buyerAadhaar.length !== 12) return alert("Please enter a valid 12-digit ID.");
+
+    setPurchaseStep("processing");
+
+    try {
+      if (!window.ethereum) throw new Error("MetaMask is required to send transactions.");
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      // 🛠️ FIX 1: Connect to the specific LandRegistry contract, not the Factory
+      const landContract = new ethers.Contract(
+        selectedAsset.registryWallet, // The address of the specific property
+        childContract.abi,            // The ABI of the child contract
+        signer
+      );
+
+      const buyerHashedId = keccak256(toUtf8Bytes(buyerAadhaar));
+      const valueInWei = ethers.parseEther(selectedAsset.price);
+
+      // 🛠️ FIX 2: Pass the correct arguments matching your Solidity function:
+      // buyLand(string memory _newFullName, bytes32 _newAadhaarHash)
+
+      // Note: You will need to add an input field in your UI to capture the buyer's name, 
+      // or replace "New Owner Name" with a state variable like `buyerName`.
+      const tx = await landContract.buyLand(
+        "New Owner Name", // Update this to dynamically pass the buyer's real name
+        buyerHashedId,
+        { value: valueInWei }
+      );
+
+      await tx.wait();
+
+      setPurchaseStep("success");
+
+    } catch (error) {
+      console.error("Purchase Error:", error);
+      alert(error.reason || "Transaction rejected or failed. Check console.");
+      setPurchaseStep("aadhaar");
     }
-
- fecthalldata();
-  }, [])
-
-
-  // 2. Buy Handler Logic
-  const handleBuy = (asset) => {
-    console.log("==== 🛒 INITIATING PURCHASE ====");
-    console.log("Asset ID:", asset.id);
-    console.log("Owner Name:", asset.owner);
-    console.log("Price to Pay: ₹", asset.price);
-    alert(`Initiating secure payment for Plot ${asset.plotNo}.\nAmount: ₹${asset.price}\nPlease confirm in your UPI/Bank Gateway.`);
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F0F0] text-[#121212] font-['Outfit'] flex flex-col">
+    <div className="min-h-screen bg-[#F0F0F0] text-[#121212] font-['Outfit'] flex flex-col relative">
       <Navbar />
 
       <main className="grow p-6 md:p-12 lg:p-20">
         <div className="max-w-7xl mx-auto">
-
           {/* Header Section */}
           <div className="mb-12 border-b-8 border-black pb-8 flex flex-col md:flex-row justify-between items-end gap-6">
             <div>
@@ -104,7 +200,7 @@ const SliceBuy = () => {
                 Secure Indian Real Estate on a Decentralized Ledger.
               </p>
               <span className="bg-[#F0C020] px-3 py-1 border-2 border-black font-black text-xs uppercase shadow-[3px_3px_0px_0px_black]">
-                Currency: INR (₹)
+                Currency: ETH (Ξ)
               </span>
             </div>
           </div>
@@ -121,88 +217,238 @@ const SliceBuy = () => {
                 </tr>
               </thead>
               <tbody className="divide-y-4 divide-black">
-                {marketplaceAssets.map((item,i) => (
-                  <tr key={i} className="hover:bg-[#F0C020]/5 transition-colors group">
-
-                    {/* Column 1: Asset Info */}
-                    <td className="p-6 border-r-4 border-black">
-                      <div className="flex items-center gap-5">
-                        <div className="w-24 h-24 border-4 border-black shrink-0 overflow-hidden bg-gray-100 rotate-2 group-hover:rotate-0 transition-transform">
-                          <img src={item.image} alt="land" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
-                        </div>
-                        <div>
-                          <p className="font-black text-2xl uppercase leading-none mb-2">{item.plotNo}</p>
-                          <div className="flex items-center gap-1 text-xs font-black text-[#1040C0] uppercase tracking-tighter">
-                            <MapPin className="w-3 h-3" />
-                            {item.location}
-                          </div>
-                        </div>
-                      </div>
+                {isLoading ? (
+                  <tr>
+                    <td colSpan="4" className="p-12 text-center font-black uppercase animate-pulse">
+                      Syncing Decentralized Ledger...
                     </td>
-
-                    {/* Column 2: Owner & Area */}
-                    <td className="p-6 border-r-4 border-black">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-[#121212] border-2 border-white rounded-none flex items-center justify-center text-white">
-                            <User className="w-4 h-4" />
-                          </div>
-                          <span className="font-black uppercase text-sm tracking-tight">{item.ownerName}</span>
-                        </div>
-                        <div className="inline-block bg-[#F0C020]/20 border-2 border-black px-3 py-1 text-[10px] font-black uppercase">
-                          Area: {item.area}
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Column 3: Price in INR */}
-                    <td className="p-6 border-r-4 border-black text-center">
-                      <div className="flex flex-col items-center">
-                        <div className="flex items-center text-3xl font-black tracking-tighter">
-                          <span className="text-sm mr-1">₹</span>
-                          $120000
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1 italic">Incl. Registration Tax</span>
-                      </div>
-                    </td>
-
-                    {/* Column 4: Buy Button */}
-                    <td className="p-6 text-center">
-                      <button
-                        onClick={() => handleBuy(asset)}
-                        className="bg-[#1040C0] text-white border-4 border-black px-8 py-4 font-black uppercase tracking-widest text-sm shadow-[6px_6px_0px_0px_#D02020] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all flex items-center gap-2 mx-auto active:bg-[#121212]"
-                      >
-                        <ShoppingCart className="w-4 h-4" />
-                        Acquire Asset
-                      </button>
-                    </td>
-
                   </tr>
-                ))}
+                ) : marketplaceAssets.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" className="p-12 text-center font-black uppercase text-[#D02020]">
+                      No properties found on the network.
+                    </td>
+                  </tr>
+                ) : (
+                  marketplaceAssets.map((item, i) => (
+                    <tr key={i} className="hover:bg-[#F0C020]/5 transition-colors group">
+                      <td className="p-6 border-r-4 border-black">
+                        <div className="flex items-center gap-5">
+                          <div className="w-24 h-24 border-4 border-black shrink-0 overflow-hidden bg-gray-100 rotate-2 group-hover:rotate-0 transition-transform">
+                            <img src={item.image} alt="land" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                          </div>
+                          <div>
+                            <p className="font-black text-xs uppercase leading-none mb-2 break-words max-w-[200px]">
+                              {item.plotNoString}
+                            </p>
+                            <div className="flex items-center gap-1 text-xs font-black text-[#1040C0] uppercase tracking-tighter">
+                              <MapPin className="w-3 h-3" />
+                              {item.location}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-6 border-r-4 border-black">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-[#121212] border-2 border-white rounded-none flex items-center justify-center text-white">
+                              <User className="w-4 h-4" />
+                            </div>
+                            <span className="font-black uppercase text-sm tracking-tight">{item.ownerName}</span>
+                          </div>
+                          <div className="inline-block bg-[#F0C020]/20 border-2 border-black px-3 py-1 text-[10px] font-black uppercase">
+                            Area: {item.area}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-6 border-r-4 border-black text-center">
+                        <div className="flex flex-col items-center">
+                          <div className="flex items-center text-3xl font-black tracking-tighter">
+                            {item.price} ETH
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-6 text-center">
+                        {item.isOwnedByMe ? (
+                          /* 
+                            Using standard CSS styling here for the ownership badge 
+                            to ensure it stands out from the rest of the layout.
+                          */
+                          <div style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            backgroundColor: "#20B040",
+                            color: "white",
+                            padding: "12px 24px",
+                            border: "4px solid black",
+                            fontWeight: "900",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.1em",
+                            boxShadow: "6px 6px 0px 0px #121212"
+                          }}>
+                            <CheckCircle2 style={{ width: "20px", height: "20px" }} />
+                            Asset Secured
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleBuyClick(item)}
+                            className="bg-[#1040C0] text-white border-4 border-black px-8 py-4 font-black uppercase tracking-widest text-sm shadow-[6px_6px_0px_0px_#D02020] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all flex items-center gap-2 mx-auto active:bg-[#121212]"
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                            Acquire Asset
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
-
-          {/* Footer Stats - Updated for INR */}
-          <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div className="bg-white p-6 border-4 border-black font-black uppercase flex flex-col items-center">
-              <span className="text-xs text-gray-400 mb-1">Live Listings</span>
-              <span className="text-3xl">03 Assets</span>
-            </div>
-            <div className="bg-[#F0C020] p-6 border-4 border-black font-black uppercase flex flex-col items-center">
-              <span className="text-xs text-[#121212]/50 mb-1">Total Marketplace Value</span>
-              <span className="text-3xl">₹ 1.43 Cr</span>
-            </div>
-            <div className="bg-[#D02020] text-white p-6 border-4 border-black font-black uppercase flex flex-col items-center">
-              <span className="text-xs text-white/50 mb-1">Security Protocol</span>
-              <span className="text-3xl tracking-tighter italic">L-Chain v1</span>
-            </div>
-          </div>
-
         </div>
       </main>
 
       <Footer />
+
+      {/* 🛑 DYNAMIC PURCHASE MODAL OVERLAY 🛑 */}
+      {isModalOpen && selectedAsset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-white border-8 border-black w-full max-w-5xl shadow-[16px_16px_0px_0px_#F0C020] flex flex-col md:flex-row relative animate-in fade-in zoom-in duration-300">
+
+            {/* Close Button - Hide during processing/success */}
+            {purchaseStep !== "processing" && purchaseStep !== "success" && (
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="absolute -top-5 -right-5 bg-[#D02020] text-white border-4 border-black p-2 hover:bg-[#121212] transition-colors z-10"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            )}
+
+            {/* Left Side: Leaflet Map (Hidden on Success screen for emphasis) */}
+            {purchaseStep !== "success" && (
+              <div className="h-64 md:h-auto md:w-1/2 border-b-8 md:border-b-0 md:border-r-8 border-black relative z-0">
+                <MapContainer
+                  center={[20.5937, 78.9629]}
+                  zoom={5}
+                  zoomControl={false}
+                  scrollWheelZoom={false}
+                  style={{ height: "100%", width: "100%", minHeight: "350px" }}
+                >
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <ModalMapBounds coordinates={selectedAsset.rawCoordinates} />
+                  <Polygon
+                    positions={selectedAsset.rawCoordinates}
+                    pathOptions={{ color: '#121212', weight: 4, fillColor: '#D02020', fillOpacity: 0.6 }}
+                  />
+                </MapContainer>
+              </div>
+            )}
+
+            {/* Right Side: Dynamic Content Area */}
+            <div className={`p-8 ${purchaseStep === "success" ? "w-full text-center" : "md:w-1/2"} flex flex-col justify-between bg-[#FFFFF4]`}>
+
+              {/* STEP 1: REVIEW */}
+              {purchaseStep === "review" && (
+                <>
+                  <div>
+                    <h3 className="text-4xl font-black uppercase mb-4 leading-none border-b-4 border-black pb-4">
+                      Review <br /><span className="text-[#1040C0]">Asset Data</span>
+                    </h3>
+                    <div className="space-y-4 mb-8">
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-gray-500 mb-1">Current Owner</p>
+                        <p className="font-bold text-xl uppercase truncate">{selectedAsset.ownerName}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-gray-500 mb-1">Total Valuation</p>
+                        <p className="text-5xl font-black">{selectedAsset.price} <span className="text-xl">ETH</span></p>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPurchaseStep("aadhaar")}
+                    className="w-full bg-[#121212] text-white border-4 border-black p-5 font-black uppercase text-xl hover:bg-[#F0C020] hover:text-black transition-colors"
+                  >
+                    Confirm Purchase
+                  </button>
+                </>
+              )}
+
+              {/* STEP 2: ENTER AADHAAR */}
+              {purchaseStep === "aadhaar" && (
+                <>
+                  <div>
+                    <h3 className="text-4xl font-black uppercase mb-4 leading-none border-b-4 border-black pb-4">
+                      Verify <br /><span className="text-[#D02020]">Identity</span>
+                    </h3>
+                    <p className="text-sm font-bold text-gray-500 uppercase mb-6">
+                      Enter your 12-digit ID to permanently link this land deed to your identity hash.
+                    </p>
+                    <input
+                      type="text"
+                      maxLength={12}
+                      placeholder="Enter 12-Digit Number"
+                      value={buyerAadhaar}
+                      onChange={(e) => setBuyerAadhaar(e.target.value.replace(/\D/g, ""))}
+                      className="w-full p-4 border-4 border-black bg-white text-2xl font-black text-center focus:outline-none focus:bg-[#F0C020]/10 mb-8"
+                    />
+                  </div>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => setPurchaseStep("review")}
+                      className="w-1/3 bg-white text-black border-4 border-black p-4 font-black uppercase text-sm hover:bg-gray-100 transition-colors"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={executePurchase}
+                      className="w-2/3 bg-[#1040C0] text-white border-4 border-black p-4 font-black uppercase text-xl hover:bg-[#121212] transition-colors"
+                    >
+                      Pay {selectedAsset.price} ETH
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* STEP 3: PROCESSING */}
+              {purchaseStep === "processing" && (
+                <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                  <div className="w-16 h-16 border-8 border-black border-t-[#1040C0] rounded-none animate-spin mb-8" />
+                  <h3 className="text-2xl font-black uppercase animate-pulse">Awaiting MetaMask...</h3>
+                  <p className="text-sm font-bold text-gray-500 uppercase mt-4">
+                    Please approve the transaction in your wallet.<br />Do not close this window.
+                  </p>
+                </div>
+              )}
+
+              {/* STEP 4: SUCCESS */}
+              {purchaseStep === "success" && (
+                <div className="flex flex-col items-center justify-center h-full text-center py-12 animate-in slide-in-from-bottom-4">
+                  <CheckCircle2 className="w-32 h-32 text-[#20B040] mb-6 drop-shadow-[8px_8px_0px_rgba(0,0,0,1)]" />
+                  <h2 className="text-6xl font-black uppercase tracking-tighter mb-4 text-[#20B040]">
+                    Asset Acquired!
+                  </h2>
+                  <p className="text-xl font-bold uppercase mb-8 border-4 border-black p-4 bg-white inline-block">
+                    Property <span className="text-[#1040C0]">{selectedAsset.id.substring(0, 8)}...</span> is now recorded on the ledger.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      window.location.reload(); // Refresh to update table ownership
+                    }}
+                    className="bg-[#121212] text-white border-4 border-black px-12 py-5 font-black uppercase tracking-widest text-xl shadow-[8px_8px_0px_0px_#F0C020] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all"
+                  >
+                    Return to Marketplace
+                  </button>
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

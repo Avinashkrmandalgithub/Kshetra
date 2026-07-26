@@ -11,7 +11,7 @@ contract AllLandRegistry {
         uint64 _PlotNumber2,
         uint64 _PlotNumber3,
         uint64 _PlotNumber4,
-        uint256 _Price, // Changed to uint256 to match msg.value standard
+        uint256 _Price, 
         string _area,
         string _Location,
         string _imgUrl,
@@ -27,7 +27,7 @@ contract AllLandRegistry {
         uint64 _PlotNumber2,
         uint64 _PlotNumber3,
         uint64 _PlotNumber4,
-        uint256 _Price, // Changed to uint256
+        uint256 _Price, 
         string memory _area,
         string memory _Location,
         string memory _imgUrl
@@ -73,14 +73,16 @@ contract LandRegistry {
     uint64 public PlotNumber2;
     uint64 public PlotNumber3;
     uint64 public PlotNumber4;
-    uint256 public Price; // Changed to uint256
+    uint256 public Price; 
     string public area;
     string public Location;
     string public imgUrl;
-    address payable public Owner; // Made payable so they can receive funds
+    address payable public Owner; 
 
-    // Event indexed by AadhaarHash so you can easily query the chain for it later
+    // 1. UPDATED: Added oldFullName and newFullName to the event
     event LandBought(
+        string oldFullName,
+        string newFullName,
         bytes32 indexed oldAadhaarHash,
         bytes32 indexed newAadhaarHash,
         address indexed oldOwner,
@@ -116,30 +118,30 @@ contract LandRegistry {
     }
 
     function buyLand(string memory _newFullName, bytes32 _newAadhaarHash) public payable {
-        // 1. Verify exact payment
+        // CHECKS
         require(msg.value == Price, "Must send the exact price of the land");
-        
-        // 2. Prevent the current owner from buying their own property
         require(msg.sender != Owner, "Owner cannot buy their own land");
 
+        // Save previous states before updating
         address payable previousOwner = Owner;
         bytes32 previousAadhaar = AadhaarHash;
+        string memory previousFullName = FullName; // 2. NEW: Save the old name
 
-        // 3. Transfer the funds to the previous owner
-        // Using .call is the recommended way to transfer ETH to avoid gas limit issues
-        (bool success, ) = previousOwner.call{value: msg.value}("");
-        require(success, "Fund transfer to the seller failed");
-
-        // 4. Update the land details to reflect the new buyer
+        // EFFECTS
         Owner = payable(msg.sender);
         FullName = _newFullName;
         AadhaarHash = _newAadhaarHash;
 
-        // 5. Emit the transaction data to the blockchain
+        // INTERACTIONS
+        (bool success, ) = previousOwner.call{value: msg.value}("");
+        require(success, "Fund transfer to the seller failed");
+
+        // 3. UPDATED: Emit the event with both names included
         emit LandBought(
+            previousFullName,
+            _newFullName,
             previousAadhaar,
             _newAadhaarHash,
-            
             previousOwner,
             msg.sender,
             msg.value,
