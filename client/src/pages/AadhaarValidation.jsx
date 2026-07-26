@@ -226,7 +226,7 @@ const AadhaarValidation = () => {
                     Your credentials have been matched successfully with the
                     UIDAI registry.
                   </p>
-                  <Link to="/verify-land">
+                  <Link to="/submit-blockchain">
                     <button className="w-full py-4 bg-black text-white border-4 border-black font-black uppercase tracking-[0.2em] shadow-[6px_6px_0px_0px_#1040C0] hover:-translate-y-1 active:translate-y-0 transition-all">
                       Proceed
                     </button>

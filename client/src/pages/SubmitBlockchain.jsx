@@ -67,16 +67,17 @@ function MapFlyToLocation({ points }) {
 export default function SubmitBlockchain() {
   const { verifyData } = useVerifyData();
   const { ethereum } = window;
+    
 
   const [points, setPoints] = useState([]);
 
   const [formData, setFormData] = useState({
     fullName: verifyData?.name || "Sk Rijwan",
     aadhaarNo: verifyData?.aadhaar || "689257557011",
-    plotNo: verifyData?.PlotNumber || "",
-    area: verifyData?.area || "",
-    price: verifyData?.price || "",
-    location: verifyData?.Location || "",
+    plotNo: "",
+    area:"",
+    price: "",
+    location: verifyData?.address || "",
   });
 
   const [blocksubmit, setBlocksubmit] = useState(false);
