@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { useNav } from "../App.jsx";
 import Button from "./UI/Button.jsx";
-import landchainLogo from "../assets/landchain.png";
+import kshetra from "../assets/kshetra.png";
 import { ethers } from "ethers";
 
 export default function Navbar() {
   const { navigateWithLoader } = useNav();
-  
+
   // Wallet State
   const [address, setAddress] = useState(null);
   const [balance, setBalance] = useState(null);
@@ -15,34 +15,33 @@ export default function Navbar() {
   // MetaMask Connection Logic
   const handleConnect = async () => {
     setIsConnecting(true);
-    
+
     try {
       if (!window.ethereum) {
-        alert('Please install MetaMask or a Web3 wallet extension.');
+        alert("Please install MetaMask or a Web3 wallet extension.");
         setIsConnecting(false);
         return;
       }
-      
+
       // Request account access
       const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts',
+        method: "eth_requestAccounts",
       });
-      
+
       const fullAddress = accounts[0];
       const showAddress = `${fullAddress.slice(0, 4)}...${fullAddress.slice(-4)}`;
       setAddress(showAddress);
-      
+
       // Fetch Balance
       const eth_bal = await window.ethereum.request({
-        method: 'eth_getBalance',
-        params: [fullAddress, 'latest']
+        method: "eth_getBalance",
+        params: [fullAddress, "latest"],
       });
-      
+
       const fullBal = ethers.formatEther(eth_bal);
       // Slice to 6 characters (e.g., "0.0123")
-      const showBal = fullBal.slice(0, 6); 
+      const showBal = fullBal.slice(0, 6);
       setBalance(showBal);
-      
     } catch (error) {
       console.error("Wallet connection failed:", error);
     } finally {
@@ -57,31 +56,30 @@ export default function Navbar() {
         className="flex items-center gap-3 cursor-pointer group"
         onClick={() => navigateWithLoader("/")}
       >
-        <div className="p-0.75 rounded-xl bg-gradient-to-tr from-[#D02020] via-[#F0C020] to-[#1040C0] transition-transform duration-300 group-hover:scale-105 shadow-[4px_4px_0px_0px_#121212]">
-          <div className="bg-[#121212] rounded-lg overflow-hidden flex items-center justify-center p-1 md:p-1.5">
+        <div className="p-0.5 bg-linear-to-tr from-[#D02020] via-[#F0C020] to-[#1040C0] transition-transform duration-300 group-hover:scale-105 shadow-[4px_4px_0px_0px_#121212] border-2 border-[#121212]">
+          <div className="bg-white flex items-center justify-center p-1 md:p-1.5">
             <img
-              src={landchainLogo}
-              alt="LandChain Logo"
-              className="h-8 md:h-10 w-auto object-contain"
+              src={kshetra}
+              alt="Kshetra Logo"
+              className="h-9 md:h-11 w-auto object-contain min-w-8"
             />
           </div>
         </div>
 
-        <span className="text-3xl font-black tracking-tighter uppercase ml-2 font-['Outfit'] text-[#121212]">
-          LandChain
+        <span className="text-2xl md:text-3xl font-black tracking-tighter uppercase font-['Outfit'] text-[#121212]">
+          Kshetra
         </span>
       </div>
 
       {/* Desktop Links */}
       <div className="hidden md:flex gap-8 items-center font-['Outfit']">
-
-         <button
+        <button
           onClick={() => navigateWithLoader("/")}
           className="font-bold uppercase tracking-widest text-[#121212] hover:text-[#1040C0] transition-colors cursor-pointer border-none bg-transparent"
         >
           Home
         </button>
-         <button
+        <button
           onClick={() => navigateWithLoader("/check-assets")}
           className="font-bold uppercase tracking-widest text-[#121212] hover:text-[#1040C0] transition-colors cursor-pointer border-none bg-transparent"
         >
@@ -111,7 +109,11 @@ export default function Navbar() {
             </div>
           </div>
         ) : (
-          <Button variant="primary" onClick={handleConnect} disabled={isConnecting}>
+          <Button
+            variant="primary"
+            onClick={handleConnect}
+            disabled={isConnecting}
+          >
             {isConnecting ? "Connecting..." : "Connect Wallet"}
           </Button>
         )}

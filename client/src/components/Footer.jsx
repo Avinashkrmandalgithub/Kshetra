@@ -1,5 +1,5 @@
 import React from "react";
-import landchainLogo from "../assets/landchain.png";
+import kshetra from "../assets/kshetra.png";
 
 export default function Footer() {
   return (
@@ -13,14 +13,14 @@ export default function Footer() {
               <div className="p-0.5 rounded-lg bg-linear-to-tr from-[#D02020] via-[#F0C020] to-[#1040C0]">
                 <div className="bg-[#121212] rounded-md p-1.5 flex items-center justify-center">
                   <img
-                    src={landchainLogo}
+                    src={kshetra}
                     alt="LandChain Logo"
                     className="h-8 w-auto object-contain"
                   />
                 </div>
               </div>
               <span className="text-3xl font-black uppercase tracking-tighter text-[#F0F0F0]">
-                LandChain
+                Kshetra
               </span>
             </div>
             <p className="text-[#F0F0F0]/60 font-medium leading-relaxed uppercase text-sm tracking-wider">
