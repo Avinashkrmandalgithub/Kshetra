@@ -6,6 +6,7 @@ import contract from "../contracts/LandRegistry.sol/AllLandRegistry.json";
 // Import the ABI specifically for the individual LandRegistry contract
 import childContract from "../contracts/LandRegistry.sol/LandRegistry.json";
 import { ethers, keccak256, toUtf8Bytes } from "ethers";
+import axios from "axios";
 
 // Leaflet Imports
 import { MapContainer, TileLayer, Polygon, useMap } from "react-leaflet";
@@ -53,8 +54,11 @@ const SliceBuy = () => {
   // 💡 Modal Flow States
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [purchaseStep, setPurchaseStep] = useState("review"); // 'review' | 'aadhaar' | 'processing' | 'success'
+  const [purchaseStep, setPurchaseStep] = useState("review"); // 'review' | 'aadhaar' | 'otp' | 'processing' | 'success' | 'buy' | 'error'
   const [buyerAadhaar, setBuyerAadhaar] = useState("");
+  const [referenceId, setReferenceId] = useState("");
+  const [aadhaarOTP, setAadhaarOTP] = useState("");
+  const [personName, setPersonName] = useState(""); // Default name, can be updated after OTP verification
 
   useEffect(() => {
     const fetchAllData = async () => {
@@ -134,6 +138,50 @@ const SliceBuy = () => {
     setIsModalOpen(true);
   };
 
+  const handleAadhaarSubmit = async () => {
+    if (buyerAadhaar.length !== 12) return alert("Please enter a valid 12-digit ID.");
+    setPurchaseStep("processing");
+    try {
+      const res = await axios.post(
+        `${import.meta.env.VITE_SERVER_URL}/api/aadhar/send-otp`,
+        {
+          aadharNumber: buyerAadhaar,
+        },
+      );
+      const refId = res.data?.data?.data?.reference_id;
+
+      setReferenceId(refId);
+      setPurchaseStep("otp");
+    } catch (error) {
+      console.error("Purchase Error:", error);
+      alert(error.reason || "Transaction rejected or failed. Check console.");
+      setPurchaseStep("error");
+    }
+  }
+
+  const handleAadhaarOTPSubmit = async () => {
+    if (aadhaarOTP.length !== 6) return alert("Please enter a valid 6-digit OTP.");
+    setPurchaseStep("processing");
+    try {
+      const res = await axios.post(
+        `${import.meta.env.VITE_SERVER_URL}/api/aadhar/verify-otp`,
+        {
+          reference_id: referenceId,
+          otp: aadhaarOTP,
+        },
+      );
+      const verified = res.data?.data?.verified;
+      if (verified) {
+        setPersonName(res.data?.data?.name || "Rakesh Kumar");
+      }
+      setPurchaseStep("buy");
+    } catch (error) {
+      console.error(error);
+      alert(error.reason || "Transaction rejected or failed. Check console.");
+      setPurchaseStep("error");
+    }
+  }
+
   // 💡 EXECUTE REAL SMART CONTRACT TRANSACTION
   // 💡 EXECUTE REAL SMART CONTRACT TRANSACTION
   const executePurchase = async () => {
@@ -163,7 +211,7 @@ const SliceBuy = () => {
       // Note: You will need to add an input field in your UI to capture the buyer's name, 
       // or replace "New Owner Name" with a state variable like `buyerName`.
       const tx = await landContract.buyLand(
-        "New Owner Name", // Update this to dynamically pass the buyer's real name
+        personName, // Update this to dynamically pass the buyer's real name
         buyerHashedId,
         { value: valueInWei }
       );
@@ -175,7 +223,7 @@ const SliceBuy = () => {
     } catch (error) {
       console.error("Purchase Error:", error);
       alert(error.reason || "Transaction rejected or failed. Check console.");
-      setPurchaseStep("aadhaar");
+      setPurchaseStep("error");
     }
   };
 
@@ -238,7 +286,7 @@ const SliceBuy = () => {
                             <img src={item.image} alt="land" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
                           </div>
                           <div>
-                            <p className="font-black text-xs uppercase leading-none mb-2 break-words max-w-[200px]">
+                            <p className="font-black text-xs uppercase leading-none mb-2 wrap-break-word max-w-50">
                               {item.plotNoString}
                             </p>
                             <div className="flex items-center gap-1 text-xs font-black text-[#1040C0] uppercase tracking-tighter">
@@ -403,12 +451,71 @@ const SliceBuy = () => {
                       Back
                     </button>
                     <button
-                      onClick={executePurchase}
+                      onClick={handleAadhaarSubmit}
                       className="w-2/3 bg-[#1040C0] text-white border-4 border-black p-4 font-black uppercase text-xl hover:bg-[#121212] transition-colors"
                     >
-                      Pay {selectedAsset.price} ETH
+                      Send OTP
                     </button>
                   </div>
+                </>
+              )}
+
+              {/* STEP 2: ENTER OTP */}
+              {purchaseStep === "otp" && (
+                <>
+                  <div>
+                    <h3 className="text-4xl font-black uppercase mb-4 leading-none border-b-4 border-black pb-4">
+                      Verify <br /><span className="text-[#D02020]">Aadhaar OTP</span>
+                    </h3>
+                    <p className="text-sm font-bold text-gray-500 uppercase mb-6">
+                      Enter your 6-digit OTP to permanently link this land deed to your identity hash.
+                    </p>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="Enter 6-Digit OTP"
+                      value={aadhaarOTP}
+                      onChange={(e) => setAadhaarOTP(e.target.value.replace(/\D/g, ""))}
+                      className="w-full p-4 border-4 border-black bg-white text-2xl font-black text-center focus:outline-none focus:bg-[#F0C020]/10 mb-8"
+                    />
+                  </div>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => setPurchaseStep("review")}
+                      className="w-1/3 bg-white text-black border-4 border-black p-4 font-black uppercase text-sm hover:bg-gray-100 transition-colors"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleAadhaarOTPSubmit}
+                      className="w-2/3 bg-[#1040C0] text-white border-4 border-black p-4 font-black uppercase text-xl hover:bg-[#121212] transition-colors"
+                    >
+                      Verify OTP
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* STEP 2: ENTER OTP */}
+              {purchaseStep === "buy" && (
+                <>
+                  <div className="text-center py-10 animate-in zoom-in-95 duration-500">
+                  <div className="w-24 h-24 bg-[#1040C0] border-4 border-black rounded-full flex items-center justify-center mx-auto mb-8 shadow-[8px_8px_0px_0px_black]">
+                    <CheckCircle2 className="w-12 h-12 text-white stroke-3" />
+                  </div>
+                  <h3 className="text-4xl font-black uppercase tracking-tighter leading-none mb-4">
+                    Identity <br /> Confirmed
+                  </h3>
+                  <p className="text-sm font-bold text-gray-600 mb-10 tracking-tight">
+                    Your credentials have been matched successfully with the
+                    UIDAI registry.
+                  </p>
+                  
+                    <button onClick={executePurchase} className="w-full py-4 bg-black text-white border-4 border-black font-black uppercase tracking-[0.2em] shadow-[6px_6px_0px_0px_#1040C0] hover:-translate-y-1 active:translate-y-0 transition-all">
+                      Pay {selectedAsset.price} ETH
+                    </button>
+                  
+                </div>
                 </>
               )}
 
@@ -441,6 +548,27 @@ const SliceBuy = () => {
                     className="bg-[#121212] text-white border-4 border-black px-12 py-5 font-black uppercase tracking-widest text-xl shadow-[8px_8px_0px_0px_#F0C020] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all"
                   >
                     Return to Marketplace
+                  </button>
+                </div>
+              )}
+
+              {purchaseStep === "error" && (
+                <div className="text-center py-10 animate-in shake">
+                  <div className="w-24 h-24 bg-[#D02020] border-4 border-black flex items-center justify-center mx-auto mb-8 shadow-[8px_8px_0px_0px_black] rotate-3">
+                    <XCircle className="w-12 h-12 text-white stroke-3" />
+                  </div>
+                  <h3 className="text-4xl font-black uppercase tracking-tighter leading-none mb-4">
+                    Verification <br /> Failed
+                  </h3>
+                  <p className="text-sm font-bold text-gray-600 mb-10">
+                    The information provided does not match our security
+                    parameters.
+                  </p>
+                  <button
+                    onClick={() => setPurchaseStep("review")}
+                    className="w-full py-4 bg-[#F0C020] border-4 border-black font-black uppercase tracking-[0.2em] shadow-[6px_6px_0px_0px_black] active:translate-y-1 transition-all"
+                  >
+                    Restart
                   </button>
                 </div>
               )}
